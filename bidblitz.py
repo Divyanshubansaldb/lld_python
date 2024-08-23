@@ -1,4 +1,6 @@
 """
+Question: https://leetcode.com/discuss/interview-question/4092098/flipkart-machine-coding
+
 features:
 1. lowest bid,
 2. declare the winner,

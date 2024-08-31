@@ -264,4 +264,6 @@ if __name__ == "__main__":
 
     print("\nSearch for all possible paths (sorted by duration):")
     app.list_all_flights("DEL", "NYC", [MealFilter(True), ExcessBaggageFilter(True)], max_hops=3, sort_ascending=True)
-
+    
+    print("\nSearch for all possible paths (sorted by duration):")
+    app.list_all_flights("DEL", "NYC", [MealFilter(True), ExcessBaggageFilter(False)], max_hops=3, sort_ascending=True)

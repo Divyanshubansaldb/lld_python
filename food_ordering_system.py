@@ -29,54 +29,65 @@ Assumptions:
 1. Unique restaurant name
 2. No need to create the user.
 """
-import enum
+from enum import Enum
 from typing import Dict, List, Union
 
 class Item:
-    def __init__(self, name, price) -> None:
+    def __init__(self, name, price=None, quantity=None) -> None:
         self.name = name
         self.price = price
+        self.quantity = quantity
 
 
 class Resturant: 
-    menu: list[Item]
-    available_quantity: Dict[Item, int]
+    menu: Dict[str, Item]
 
     def __init__(self, name, rating, max_orders) -> None:
         self.name = name
         self.rating = rating
         self.max_orders = max_orders
-        self.menu = []
+        self.menu = {}
 
     def get_item(self, item_name):
-        for obj in self.items:
-            if obj.name == item_name:
-                return obj
+        return self.menu.get(item_name)
 
-        return None
+    def update_item(self, item_name: str, new_price: int = None, add_quantity: int = None):
+        item = self.get_item(item_name=item_name)
+        if item == None: raise Exception("No item with this name exist in the resturant!")
+        if new_price is not None:
+            item.price = new_price
+            print(f"price updated for the item {item_name}")
+        if add_quantity is not None:
+            item.quantity += add_quantity
+            print(f"quantity updated for the item {item_name}")
 
-    def item_price(self, item_name):
-        item = self.get_item(item_name)
-        return item.price if item else None
+    def add_item(self, item_name: str, price: int, quantity: int):
+        self.menu[item_name] = Item(item_name, price, quantity)
+        print("Item added to the resturant")
     
-    def item_quantity(self, item_name):
-        item = self.get_item(item_name)
-        return self.available_quantity.get(item) if item else None
-
 
 class Order:
-    class STATUS(enum):
+    class STATUS(Enum):
         RECEIVED = 0
         ACCEPTED = 1
         COMPLTED = 2
         CANCELLED = 3
 
-    items_quan: list[(Item, int)]
+    user_name: str
+    items: Dict[str, Item]
     resturant: Resturant
 
-    def __init__(self, items_quan: list[(Item, int)]) -> None:    
-        self.items_quan = items_quan
+    def __init__(self, user_name:str, items_quan: list[(str, int)]) -> None:
+        for item_name, quan in items_quan:
+            self.items[item_name] = Item(name=item_name, quantity=quan)
         self.status = self.STATUS.RECEIVED
+        self.user_name = user_name
+
+    def accept_order(self, item_price: list[(str, int)], resturant: Resturant):
+        for item_name, price in item_price:
+            self.items[item_name].price = price
+        self.status = self.STATUS.ACCEPTED
+        self.resturant = resturant
 
 
 class ResturantController:
@@ -95,51 +106,23 @@ class ResturantController:
         for obj in self.resturants:
             if obj.name == name:
                 return obj
-        
         return None
 
     def add(self, name, rating, max_orders):
         self.resturants.append(
             Resturant(name, rating, max_orders)
         )
-    
-    def update_item(self, name: str, item_name: str, new_price: int = None, new_quantity: int = None):
-        resturant = self.get(name=name)
-        if resturant == None: raise Exception("Resturant with name does not exist")
-        item = resturant.get_item(item_name=item_name)
-        if item == None: raise Exception("No item with this name exist in the resturant!")
-        if new_price is not None:
-            item.price = new_price
-            print(f"price updated for the item {item_name}")
-        if new_quantity is not None:
-            resturant.available_quantity[item] = new_quantity
-            print(f"quantity updated for the item {item_name}")
 
-    def add_item(self, name: str, item_name: str, price: int):
-        resturant = self.get(name = name)
-        if resturant == None: raise Exception("Resturant with name does not exist")
-        item = Item(name, price)
-        resturant.append(item)
-        print("Item added to the resturant")
-    
 
 class ResturantSelectionStretegy:
     def __init__(self, order: Order, resturant_controller: ResturantController) -> None:
         self.order = order
         self.resturant_controller = resturant_controller
 
-    def validate(self, resturant:Resturant):
-        for item in self.order.items_quan:
-            item_name, quan = item
-            if resturant.item_quantity(item_name) >= quan:
-                return False
-        return True
-
     def compute_cost(self, resturant:Resturant) -> int:
         price = 0
-        for item in self.order.items_quan:
-            item_name, quan = item
-            price += quan * resturant.item_price(item_name)
+        for item_name, item in self.order.items.items():
+            price += item.quantity * resturant.get_item(item_name).price
         return price
 
     def select_resturant(self):
@@ -149,7 +132,7 @@ class ResturantSelectionStretegy:
 class ResturantOrderManager:
     _instance = None
     resturant_controller: ResturantController
-    orders_list = Dict[Resturant, list[Order]]
+    resturant_orders_list = Dict[str, list[Order]]
 
     def __new__(cls, *args, **kwargs):
         if cls._instance is None:
@@ -159,9 +142,31 @@ class ResturantOrderManager:
     def __init__(self, controller: ResturantController) -> None:
         self.resturant_controller = controller
     
-    def new_order(self, items_quan: list[(Item, int)], strategy: ResturantSelectionStretegy):
-        order = Order(items_quan)
-        order.resturant = strategy(order).select_resturant()
+    @classmethod
+    def validate(cls, resturant: Resturant, order: Order):
+        for item_name, item in order.items.items():
+            if resturant.get_item(item_name).quantity >= item.quantity:
+                return False
+        if resturant.max_orders <= len(cls.resturant_orders_list[resturant.name]):
+            return False
+        return True
+
+    def process_order(self, order: Order, resturant: Resturant):
+        item_price = []
+        for item_name, item in order.items.items():
+            resturant.update_item(item_name=item_name, add_quantity=-1*item.quantity)
+            item_price.append((item_name, item.price))
+        order.accept_order(item_price=item_price, resturant=resturant)
+        if self.resturant_orders_list.get(resturant.name) is None:
+            self.resturant_orders_list[resturant.name] = []
+        self.resturant_orders_list[resturant.name].append(order)
+
+    def new_order(self, user_name: str, food_quan: list[(str, int)], strategy: ResturantSelectionStretegy):
+        order = Order(user_name=user_name, items_quan=food_quan)
+        resturant = strategy(order).select_resturant()
+        if resturant is None:
+            print("No resturant is available to serve the order!!")
+        self.process_order(order, resturant)
 
 
 class LowestCostSelectionStrategy(ResturantSelectionStretegy):
@@ -172,10 +177,38 @@ class LowestCostSelectionStrategy(ResturantSelectionStretegy):
         min_price = 0
         min_resturant = None
         for resturant in self.resturant_controller.resturants:
-            if self.validate(resturant):
+            if ResturantOrderManager.validate(resturant=resturant, order=self.order):
                 price = self.compute_cost(resturant)
                 if price < min_price:
                     min_price, min_resturant = price, resturant
         
         return min_resturant
+
+
+if __name__ == "__main__":
+    rc = ResturantController()
+    rc.add(name="R1", rating=4.5, max_orders=5)
+    rc.get("R1").add_item(item_name="veg biryani", price=100, quantity=30)
+    rc.get("R1").add_item(item_name="Paneer Butter Masala", price=150, quantity=30)
+    
+    rc.add(name="R2", rating=4, max_orders=5)
+    rc.get("R2").add_item(item_name="Paneer Butter Masala", price=175, quantity=30)
+    rc.get("R2").add_item(item_name="Idli", price=10, quantity=30)
+    rc.get("R2").add_item(item_name="Dosa", price=50, quantity=30)
+    rc.get("R2").add_item(item_name="veg biryani", price=80, quantity=30)
+
+    rc.add(name="R3", rating=4.9, max_orders=1)
+    rc.get("R3").add_item(item_name="Gobi Manchurian", price=150, quantity=30)
+    rc.get("R3").add_item(item_name="Idli", price=15, quantity=30)
+    rc.get("R3").add_item(item_name="Paneer Butter Masala", price=175, quantity=30)
+    rc.get("R3").add_item(item_name="Dosa", price=30, quantity=30)
+
+    rc.get("R1").add_item(item_name="Chicken65", price=250, quantity=30)
+    rc.get("R2").update_item(item_name="Paneer Butter Masala", new_price=150)
+
+    rom = ResturantOrderManager(controller=rc)
+    rom.new_order(user_name="Ashwin", food_quan=[("Idli", 3), ("Dosa", 1)], strategy=LowestCostSelectionStrategy)
+
+    rom.new_order(user_name="Harish", food_quan=[("Idli", 3), ("Dosa", 1)], strategy=LowestCostSelectionStrategy)
+
 

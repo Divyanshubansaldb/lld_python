@@ -43,25 +43,10 @@ class City:
     def __str__(self):
         return self.code
     
-    def __lt__(self, other):
-        if not isinstance(other, City):
-            return NotImplemented
-        return self.code < other.code
-
-    def __le__(self, other):
-        if not isinstance(other, City):
-            return NotImplemented
-        return self.code <= other.code
-
     def __gt__(self, other):
         if not isinstance(other, City):
             return NotImplemented
         return self.code > other.code
-
-    def __ge__(self, other):
-        if not isinstance(other, City):
-            return NotImplemented
-        return self.code >= other.code
 
 class Airline:
     def __init__(self, name: str, meal_provided: bool = False, excess_baggage_allowed: bool = False):
@@ -83,23 +68,30 @@ class Flight:
         self.duration = duration
 
 class FlightFilter(ABC):
+    def __init__(self, enable: bool) -> None:
+        self.enable = enable
+
     @abstractmethod
     def apply(self, flight: Flight) -> bool:
         pass
 
 class MealFilter(FlightFilter):
-    def __init__(self, meal_provided: bool):
-        self.meal_provided = meal_provided
+    def __init__(self, enable: bool) -> None:
+        super().__init__(enable)
 
     def apply(self, flight: Flight) -> bool:
-        return flight.airline.meal_provided == self.meal_provided
+        if self.enable is False:
+            return True
+        return flight.airline.meal_provided
 
 class ExcessBaggageFilter(FlightFilter):
-    def __init__(self, excess_baggage_allowed: bool):
-        self.excess_baggage_allowed = excess_baggage_allowed
+    def __init__(self, enable: bool) -> None:
+        super().__init__(enable)
 
     def apply(self, flight: Flight) -> bool:
-        return flight.airline.excess_baggage_allowed == self.excess_baggage_allowed
+        if self.enable is False:
+            return True
+        return flight.airline.excess_baggage_allowed
 
 class FlightDatabase:
     def __init__(self):
@@ -235,7 +227,7 @@ class FlipTripApp:
         print(f"Minimum cost path: {min_cost}, Cost: {min_cost.total_cost}, Hops: {min_cost.hops}")
         print(f"Minimum hops path: {min_hops}, Cost: {min_hops.total_cost}, Hops: {min_hops.hops}")
 
-    def search_all_flights(self, origin: str, destination: str, filters: List[FlightFilter] = None, 
+    def list_all_flights(self, origin: str, destination: str, filters: List[FlightFilter] = None, 
                            max_hops: int = 3, sort_ascending: bool = True):
         origin_city = City(origin)
         destination_city = City(destination)
@@ -261,14 +253,15 @@ if __name__ == "__main__":
 
     # Register flights
     app.register_flight("JetAir", "DEL", "BLR", 500, 120)
-    app.register_flight("AirIndia", "BLR", "NYC", 1000, 900)
+    app.register_flight("AirIndia", "BLR", "NYC", 600, 900)
     app.register_flight("Emirates", "DEL", "NYC", 1200, 960)
     app.register_flight("Lufthansa", "DEL", "FRA", 800, 480)
     app.register_flight("Lufthansa", "FRA", "NYC", 600, 540)
 
     # Search flights (minimum cost and minimum hops)
     print("Search for minimum cost and minimum hops:")
-    app.search_flight("DEL", "NYC", [MealFilter(True), ExcessBaggageFilter(True)])
+    app.search_flight("DEL", "NYC", [MealFilter(True), ExcessBaggageFilter(False)])
 
     print("\nSearch for all possible paths (sorted by duration):")
-    app.search_all_flights("DEL", "NYC", [MealFilter(True), ExcessBaggageFilter(True)], max_hops=3, sort_ascending=True)
+    app.list_all_flights("DEL", "NYC", [MealFilter(True), ExcessBaggageFilter(True)], max_hops=3, sort_ascending=True)
+

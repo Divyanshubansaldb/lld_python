@@ -93,15 +93,21 @@ class ExcessBaggageFilter(FlightFilter):
             return True
         return flight.airline.excess_baggage_allowed
 
+class AirlineDatabase:
+    def __init__(self):
+        self.airlines: Dict[str, Airline] = {}
+
+    def get(self, airline_name: str):
+        return self.airlines[airline_name]
+
+    def add(self, airline: Airline):
+        self.airlines[airline.name] = airline
+
 class FlightDatabase:
     def __init__(self):
         self.flights: List[Flight] = []
-        self.airlines: Dict[str, Airline] = {}
 
-    def add_airline(self, airline: Airline):
-        self.airlines[airline.name] = airline
-
-    def add_flight(self, flight: Flight):
+    def add(self, flight: Flight):
         self.flights.append(flight)
 
     def get_all_cities(self) -> Set[City]:
@@ -133,8 +139,8 @@ class FlightPath:
         return " -> ".join(str(flight.origin) for flight in self.flights) + f" -> {self.flights[-1].destination}"
 
 class FlightSearchEngine:
-    def __init__(self, database: FlightDatabase):
-        self.database = database
+    def __init__(self, flight_database: FlightDatabase):
+        self.database = flight_database
 
     def search(self, origin: City, destination: City, filters: List[FlightFilter] = None) -> List[FlightPath]:
         min_cost_path = self._dijkstra(origin, destination, lambda f: f.cost, filters)
@@ -199,21 +205,22 @@ class FlightSearchEngine:
 
 class FlipTripApp:
     def __init__(self):
-        self.database = FlightDatabase()
-        self.search_engine = FlightSearchEngine(self.database)
+        self.flight_database = FlightDatabase()
+        self.airline_database = AirlineDatabase()
+        self.search_engine = FlightSearchEngine(flight_database=self.flight_database)
 
     def register_airline(self, name: str, meal_provided: bool = False, excess_baggage_allowed: bool = False):
         airline = Airline(name, meal_provided, excess_baggage_allowed)
-        self.database.add_airline(airline)
+        self.airline_database.add(airline)
 
     def register_flight(self, airline_name: str, origin: str, destination: str, cost: float, duration: int):
-        airline = self.database.airlines.get(airline_name)
+        airline = self.airline_database.get(airline_name)
         if not airline:
             raise ValueError(f"Airline {airline_name} not found. Please register the airline first.")
         origin_city = City(origin)
         destination_city = City(destination)
         flight = Flight(airline, origin_city, destination_city, cost, timedelta(minutes=duration))
-        self.database.add_flight(flight)
+        self.flight_database.add(flight)
 
     def search_flight(self, origin: str, destination: str, filters: List[FlightFilter] = None):
         origin_city = City(origin)
